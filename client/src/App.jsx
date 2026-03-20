@@ -4,6 +4,7 @@ import { SocketProvider } from './context/SocketContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Claims from './pages/Claims';
 import Earnings from './pages/Earnings';
 import FraudDefense from './pages/FraudDefense';
 import Sensors from './pages/Sensors';
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<Navigate to="/dashboard" />} />
               <Route path="dashboard" element={<Dashboard />} />
+              <Route path="claims" element={<Claims />} />
               <Route path="earnings" element={<Earnings />} />
               <Route path="fraud-defense" element={<FraudDefense />} />
               <Route path="sensors" element={<Sensors />} />

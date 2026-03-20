@@ -17,6 +17,7 @@ const STATUS = {
 const CLAIM_ICON = {
   heavy_rain: '🌧', extreme_heat: '🌡',
   poor_air_quality: '💨', storm: '⛈', combined: '🌪',
+  flood: '🌊', curfew: '🚫', other: '📋',
 };
 
 export default function AdminDashboard() {
@@ -34,19 +35,20 @@ export default function AdminDashboard() {
 
   const load = () => {
     setLastRefresh(new Date());
+    setLoading(true);
     Promise.all([
-      api.get('/admin/dashboard'),
-      api.get('/admin/claims?limit=100'),
-      api.get('/admin/users'),
+      api.get('/admin/dashboard').catch(() => ({ data: null })),
+      api.get('/admin/claims?limit=200').catch(() => ({ data: { claims: [] } })),
+      api.get('/admin/users').catch(() => ({ data: [] })),
       api.get('/fraud/all').catch(() => ({ data: [] })),
       api.get('/fraud/stats').catch(() => ({ data: null })),
     ]).then(([d, c, u, fr, fs]) => {
-      setDashData(d.data);
-      if (c.data.claims?.length) setClaims(c.data.claims);
-      if (u.data?.length) setUsers(u.data);
-      setFraudReports(fr.data || []);
+      if (d.data) setDashData(d.data);
+      setClaims(Array.isArray(c.data?.claims) ? c.data.claims : []);
+      setUsers(Array.isArray(u.data) ? u.data : []);
+      setFraudReports(Array.isArray(fr.data) ? fr.data : []);
       setFraudStats(fs.data || null);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).finally(() => setLoading(false));
   };
 
   const runFraudAnalysis = async (workerId) => {
@@ -57,18 +59,31 @@ export default function AdminDashboard() {
 
   useEffect(() => { load(); }, []);
 
-  const updateClaim = async (id, status) => {
-    await api.put(`/admin/claims/${id}`, { status }).catch(() => {});
-    setClaims(prev => prev.map(c => c._id === id ? { ...c, status } : c));
+  const updateClaim = async (id, status, adminNote = '') => {
+    try {
+      const { data } = await api.put(`/admin/claims/${id}`, { status, adminNote });
+      // Use server response to update — ensures payoutDate and other fields are fresh
+      setClaims(prev => prev.map(c => c._id === id ? { ...c, ...data, status } : c));
+    } catch { /* silent — optimistic already applied */ }
   };
 
   const totalPayout = claims
     .filter(c => c.status === 'paid' || c.status === 'auto_approved')
     .reduce((s, c) => s + c.payoutAmount, 0);
 
-  const filteredClaims = claimFilter === 'all'
-    ? claims
-    : claims.filter(c => c.status === claimFilter);
+  const filteredClaims = (() => {
+    if (claimFilter === 'all')      return claims;
+    if (claimFilter === 'approved') return claims.filter(c => c.status === 'paid' || c.status === 'auto_approved');
+    return claims.filter(c => c.status === claimFilter);
+  })();
+
+  const claimCounts = {
+    all:      claims.length,
+    pending:  claims.filter(c => c.status === 'pending').length,
+    flagged:  claims.filter(c => c.status === 'flagged').length,
+    approved: claims.filter(c => c.status === 'paid' || c.status === 'auto_approved').length,
+    rejected: claims.filter(c => c.status === 'rejected').length,
+  };
 
   const byCity = users.reduce((acc, u) => {
     const city = u.location?.city || 'Unknown';
@@ -390,18 +405,25 @@ export default function AdminDashboard() {
       {/* ── CLAIMS MANAGEMENT ── */}
       {tab === 'claims' && (
         <div className="space-y-4">
+          {/* Filter bar */}
           <div className="flex items-center gap-2 flex-wrap">
-            {['all', 'paid', 'auto_approved', 'pending', 'flagged', 'rejected'].map(s => (
-              <button key={s} onClick={() => setClaimFilter(s)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium capitalize transition-all ${
-                  claimFilter === s
+            {[
+              { key: 'all',      label: 'All',             count: claimCounts.all },
+              { key: 'pending',  label: '🟡 Pending',       count: claimCounts.pending },
+              { key: 'flagged',  label: '🔴 Under Review',  count: claimCounts.flagged },
+              { key: 'approved', label: '🟢 Approved',      count: claimCounts.approved },
+              { key: 'rejected', label: '⚫ Rejected',      count: claimCounts.rejected },
+            ].map(({ key, label, count }) => (
+              <button key={key} onClick={() => setClaimFilter(key)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                  claimFilter === key
                     ? 'bg-teal-600 text-white shadow-sm'
                     : 'bg-white/80 border border-emerald-200 text-gray-600 hover:border-teal-300 hover:text-teal-700'
                 }`}>
-                {s.replace('_', ' ')} ({s === 'all' ? claims.length : claims.filter(c => c.status === s).length})
+                {label} <span className={`ml-1 font-bold ${ claimFilter === key ? 'text-white/80' : 'text-gray-400'}`}>({count})</span>
               </button>
             ))}
-            <span className="ml-auto text-xs text-gray-400">{filteredClaims.length} results</span>
+            <span className="ml-auto text-xs text-gray-400">{filteredClaims.length} result{filteredClaims.length !== 1 ? 's' : ''}</span>
           </div>
 
           <div className="space-y-2">
@@ -438,6 +460,22 @@ export default function AdminDashboard() {
                           </span>
                           <span>{new Date(claim.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
+                        {claim.description && (
+                          <p className="text-xs text-gray-500 mt-1.5 italic">"{claim.description}"</p>
+                        )}
+                        {claim.fraudScore > 0 && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-xs text-gray-400">Fraud Score:</span>
+                            <span className={`text-xs font-bold ${
+                              claim.fraudScore >= 60 ? 'text-red-600' : claim.fraudScore >= 30 ? 'text-amber-600' : 'text-emerald-600'
+                            }`}>{claim.fraudScore}/100</span>
+                            <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${
+                                claim.fraudScore >= 60 ? 'bg-red-500' : claim.fraudScore >= 30 ? 'bg-amber-500' : 'bg-emerald-500'
+                              }`} style={{ width: `${claim.fraudScore}%` }} />
+                            </div>
+                          </div>
+                        )}
                         {claim.sensorData && (
                           <div className="flex gap-2 mt-2 flex-wrap text-xs">
                             <span className="text-orange-500 bg-orange-50 px-2 py-0.5 rounded-lg">🌡 {claim.sensorData.temperature}°C</span>

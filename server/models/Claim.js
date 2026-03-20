@@ -6,7 +6,7 @@ const claimSchema = new mongoose.Schema({
   sensorData: { type: mongoose.Schema.Types.ObjectId, ref: 'SensorData' },
   claimType: {
     type: String,
-    enum: ['extreme_heat', 'heavy_rain', 'poor_air_quality', 'storm', 'combined'],
+    enum: ['extreme_heat', 'heavy_rain', 'poor_air_quality', 'storm', 'combined', 'flood', 'curfew', 'other'],
     required: true
   },
   triggerValues: {
@@ -31,8 +31,10 @@ const claimSchema = new mongoose.Schema({
     type: { type: String },
     description: String
   }],
+  fraudScore: { type: Number, default: 0 },
   isAutoTriggered: { type: Boolean, default: true },
-  description: String
+  description: String,
+  adminNote: String
 }, { timestamps: true });
 
 module.exports = mongoose.model('Claim', claimSchema);

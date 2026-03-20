@@ -3,19 +3,25 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import {
   Shield, LayoutDashboard, TrendingUp, Activity,
-  CreditCard, Settings, LogOut, Bell, X, Wifi, ShieldAlert
+  CreditCard, Settings, LogOut, Bell, X, Wifi, ShieldAlert, FileText
 } from 'lucide-react';
 import { useState } from 'react';
 
 const workerNav = [
   { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/sensors',      icon: Activity,        label: 'Live Sensors' },
+  { to: '/claims',       icon: FileText,        label: 'My Claims' },
   { to: '/earnings',     icon: TrendingUp,      label: 'Earnings' },
   { to: '/subscription', icon: CreditCard,      label: 'Insurance' },
   { to: '/fraud-defense',icon: ShieldAlert,     label: 'Defense Shield' },
 ];
 const adminNav = [
-  { to: '/admin', icon: Settings, label: 'Admin Panel' },
+  { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/sensors',      icon: Activity,        label: 'Live Sensors' },
+  { to: '/earnings',     icon: TrendingUp,      label: 'Earnings' },
+  { to: '/subscription', icon: CreditCard,      label: 'Insurance' },
+  { to: '/fraud-defense',icon: ShieldAlert,     label: 'Defense Shield' },
+  { to: '/admin',        icon: Settings,        label: 'Admin Panel' },
 ];
 
 export default function Layout() {
@@ -25,7 +31,7 @@ export default function Layout() {
   const [showNotifs, setShowNotifs] = useState(false);
   const unread = notifications.length;
   const isAdmin = user?.role === 'admin';
-  const navItems = isAdmin ? [...workerNav, ...adminNav] : workerNav;
+  const navItems = isAdmin ? adminNav : workerNav;
 
   return (
     <div className="flex h-screen overflow-hidden"

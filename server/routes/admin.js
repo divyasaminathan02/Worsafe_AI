@@ -88,8 +88,11 @@ router.get('/claims', async (req, res) => {
 
 router.put('/claims/:id', async (req, res) => {
   try {
-    const { status } = req.body;
-    const claim = await Claim.findByIdAndUpdate(req.params.id, { status }, { new: true })
+    const { status, adminNote } = req.body;
+    const update = { status };
+    if (adminNote !== undefined) update.adminNote = adminNote;
+    if (status === 'paid' || status === 'auto_approved') update.payoutDate = new Date();
+    const claim = await Claim.findByIdAndUpdate(req.params.id, update, { new: true })
       .populate('worker', 'name email');
     res.json(claim);
   } catch (err) { res.status(500).json({ message: err.message }); }
