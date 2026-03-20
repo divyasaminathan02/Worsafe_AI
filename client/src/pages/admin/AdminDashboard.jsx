@@ -3,7 +3,7 @@ import api from '../../utils/api';
 import {
   Users, FileText, Activity, CreditCard, CheckCircle,
   AlertTriangle, DollarSign, MapPin, RefreshCw, XCircle,
-  TrendingUp, Phone, Mail, Calendar
+  TrendingUp, Phone, Mail, Calendar, ShieldAlert
 } from 'lucide-react';
 
 const STATUS = {
@@ -23,6 +23,8 @@ export default function AdminDashboard() {
   const [dashData, setDashData]         = useState(null);
   const [claims, setClaims]             = useState([]);
   const [users, setUsers]               = useState([]);
+  const [fraudReports, setFraudReports] = useState([]);
+  const [fraudStats, setFraudStats]     = useState(null);
   const [tab, setTab]                   = useState('overview');
   const [loading, setLoading]           = useState(true);
   const [claimFilter, setClaimFilter]   = useState('all');
@@ -36,11 +38,21 @@ export default function AdminDashboard() {
       api.get('/admin/dashboard'),
       api.get('/admin/claims?limit=100'),
       api.get('/admin/users'),
-    ]).then(([d, c, u]) => {
+      api.get('/fraud/all').catch(() => ({ data: [] })),
+      api.get('/fraud/stats').catch(() => ({ data: null })),
+    ]).then(([d, c, u, fr, fs]) => {
       setDashData(d.data);
       if (c.data.claims?.length) setClaims(c.data.claims);
       if (u.data?.length) setUsers(u.data);
+      setFraudReports(fr.data || []);
+      setFraudStats(fs.data || null);
     }).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  const runFraudAnalysis = async (workerId) => {
+    await api.post(`/fraud/analyze/${workerId}`).catch(() => {});
+    const fr = await api.get('/fraud/all').catch(() => ({ data: [] }));
+    setFraudReports(fr.data || []);
   };
 
   useEffect(() => { load(); }, []);
@@ -133,6 +145,7 @@ export default function AdminDashboard() {
           { key: 'overview', label: 'Overview' },
           { key: 'workers',  label: `Workers (${users.length})` },
           { key: 'claims',   label: `Claims (${claims.length})` },
+          { key: 'fraud',    label: `Defense (${fraudReports.length})` },
         ].map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`tab-btn ${tab === key ? 'tab-btn-active' : 'tab-btn-inactive'}`}>
@@ -459,6 +472,124 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+      {/* ── FRAUD DEFENSE TAB ── */}
+      {tab === 'fraud' && (
+        <div className="space-y-5">
+
+          {/* Summary stats */}
+          {fraudStats && (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { label: 'Total Analyzed', value: fraudStats.total,      color: 'text-teal-600',    bg: 'bg-teal-50' },
+                { label: 'Genuine',        value: fraudStats.genuine,    color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { label: 'Suspicious',     value: fraudStats.suspicious, color: 'text-amber-600',   bg: 'bg-amber-50' },
+                { label: 'Fraud Risk',     value: fraudStats.fraudRisk,  color: 'text-red-600',     bg: 'bg-red-50' },
+                { label: 'High Risk (60+)',value: fraudStats.highRisk,   color: 'text-red-700',     bg: 'bg-red-100' },
+                { label: 'Avg Score',      value: `${fraudStats.avgScore}/100`, color: 'text-gray-700', bg: 'bg-gray-50' },
+              ].map(({ label, value, color, bg }) => (
+                <div key={label} className={`card p-4 text-center ${bg}`}>
+                  <p className={`text-xl font-bold ${color}`}>{value}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Reports table */}
+          <div className="card p-5">
+            <h3 className="font-semibold text-gray-700 text-sm mb-4 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-teal-600" />
+              Worker Fraud Reports
+            </h3>
+            {fraudReports.length === 0 ? (
+              <div className="text-center py-12">
+                <ShieldAlert className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm">No fraud reports yet. Reports are generated when workers submit claims.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {fraudReports.map(r => {
+                  const verdictColor = r.verdict === 'fraud_risk' ? 'text-red-600 bg-red-50 border-red-200'
+                    : r.verdict === 'suspicious' ? 'text-amber-600 bg-amber-50 border-amber-200'
+                    : 'text-emerald-600 bg-emerald-50 border-emerald-200';
+                  const scoreColor = r.fraudScore >= 60 ? 'text-red-600'
+                    : r.fraudScore >= 30 ? 'text-amber-600' : 'text-emerald-600';
+                  const barColor = r.fraudScore >= 60 ? 'bg-red-500'
+                    : r.fraudScore >= 30 ? 'bg-amber-500' : 'bg-emerald-500';
+                  return (
+                    <div key={r._id} className="p-4 bg-gray-50/80 rounded-xl border border-gray-100">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center font-bold text-white text-sm flex-shrink-0">
+                            {r.worker?.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800">{r.worker?.name || 'Unknown'}</p>
+                            <p className="text-xs text-gray-400">{r.worker?.location?.city} · {r.worker?.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border capitalize ${verdictColor}`}>
+                            {r.verdict?.replace(/_/g, ' ')}
+                          </span>
+                          <span className={`text-lg font-bold ${scoreColor}`}>{r.fraudScore}<span className="text-xs text-gray-400">/100</span></span>
+                          <button onClick={() => runFraudAnalysis(r.worker?._id)}
+                            className="text-xs px-2.5 py-1 bg-teal-50 border border-teal-200 text-teal-700 rounded-xl hover:bg-teal-100 transition-all">
+                            Re-analyze
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Score bar */}
+                      <div className="mt-3 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-700 ${barColor}`}
+                          style={{ width: `${r.fraudScore}%` }} />
+                      </div>
+
+                      {/* Signal scores */}
+                      {r.signals && (
+                        <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {Object.entries(r.signals).map(([key, sig]) => (
+                            <div key={key} className="text-xs bg-white rounded-lg p-2 border border-gray-100">
+                              <div className="flex justify-between mb-1">
+                                <span className="text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                <span className={sig?.score >= 60 ? 'text-red-600 font-bold' : sig?.score >= 30 ? 'text-amber-600 font-bold' : 'text-emerald-600'}>
+                                  {sig?.score ?? 0}
+                                </span>
+                              </div>
+                              <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${
+                                  (sig?.score ?? 0) >= 60 ? 'bg-red-400' : (sig?.score ?? 0) >= 30 ? 'bg-amber-400' : 'bg-emerald-400'
+                                }`} style={{ width: `${sig?.score ?? 0}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Flags */}
+                      {r.flags?.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {r.flags.map((f, i) => (
+                            <span key={i} className={`text-xs px-2 py-0.5 rounded-lg border capitalize ${
+                              f.severity === 'high' ? 'bg-red-50 text-red-700 border-red-200'
+                              : f.severity === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                            }`}>
+                              ⚑ {f.type?.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

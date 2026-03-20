@@ -20,12 +20,16 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.email.trim() || !form.password.trim()) {
+      return setError('Email and password are required');
+    }
     setLoading(true); setError('');
     try {
-      const u = await login(form.email, form.password);
+      const u = await login(form.email.trim(), form.password);
       navigate(u.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      // Show the actual server message — api.js enriches network errors
+      setError(err.response?.data?.message || err.message || 'Login failed. Please try again.');
     } finally { setLoading(false); }
   };
 
@@ -93,8 +97,9 @@ export default function Login() {
           <p className="text-gray-500 text-sm mb-8">Sign in to your insurance dashboard</p>
 
           {error && (
-            <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex items-center gap-2">
-              <span className="text-base">⚠</span> {error}
+            <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex items-start gap-2">
+              <span className="text-base flex-shrink-0">⚠</span>
+              <span>{error}</span>
             </div>
           )}
 

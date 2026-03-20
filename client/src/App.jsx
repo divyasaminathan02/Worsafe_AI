@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Earnings from './pages/Earnings';
+import FraudDefense from './pages/FraudDefense';
 import Sensors from './pages/Sensors';
 import Subscription from './pages/Subscription';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -29,6 +30,7 @@ export default function App() {
               <Route index element={<Navigate to="/dashboard" />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="earnings" element={<Earnings />} />
+              <Route path="fraud-defense" element={<FraudDefense />} />
               <Route path="sensors" element={<Sensors />} />
               <Route path="subscription" element={<Subscription />} />
               <Route path="admin" element={<PrivateRoute adminOnly><AdminDashboard /></PrivateRoute>} />

@@ -20,7 +20,7 @@ export default function Register() {
       await register({ ...form, location: { city: form.city } });
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed');
+      setError(err.response?.data?.message || err.message || 'Registration failed. Please try again.');
     } finally { setLoading(false); }
   };
 

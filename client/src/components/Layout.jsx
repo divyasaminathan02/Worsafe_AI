@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import {
   Shield, LayoutDashboard, TrendingUp, Activity,
-  CreditCard, Settings, LogOut, Bell, X, Wifi
+  CreditCard, Settings, LogOut, Bell, X, Wifi, ShieldAlert
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -12,6 +12,7 @@ const workerNav = [
   { to: '/sensors',      icon: Activity,        label: 'Live Sensors' },
   { to: '/earnings',     icon: TrendingUp,      label: 'Earnings' },
   { to: '/subscription', icon: CreditCard,      label: 'Insurance' },
+  { to: '/fraud-defense',icon: ShieldAlert,     label: 'Defense Shield' },
 ];
 const adminNav = [
   { to: '/admin', icon: Settings, label: 'Admin Panel' },
